@@ -13,6 +13,11 @@ import wandb
 
 from src.model.gpt import TinyGPT
 
+# Enable TF32 for better performance on Ampere+ GPUs
+if torch.cuda.is_available():
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
 
 # ==========================
 # CONFIG
@@ -124,6 +129,9 @@ def main():
         n_heads=config["n_heads"],
     ).to(DEVICE)
 
+    if DEVICE.type == "cuda":
+        model = torch.compile(model)
+
     effective_tokens = config["batch_size"] * config["context_size"] * config["grad_accum_steps"]
     print(f"Effective tokens per optimizer step: {effective_tokens}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
@@ -166,7 +174,11 @@ def main():
             x, y = get_batch(train_data, config["batch_size"], config["context_size"])
             x, y = x.to(DEVICE), y.to(DEVICE)
 
-            with torch.autocast(device_type=DEVICE.type, enabled=config["use_amp"]):
+            with torch.autocast(
+                device_type="cuda",
+                dtype=torch.bfloat16,
+                enabled=(DEVICE.type == "cuda" and config["use_amp"])
+            ):
                 logits = model(x)
                 loss = criterion(
                     logits.view(-1, config["vocab_size"]),

@@ -1,5 +1,66 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model, n_heads, dim_feedforward, dropout=0.1):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+        
+        self.ln1 = nn.LayerNorm(d_model)
+        self.ln2 = nn.LayerNorm(d_model)
+        
+        # QKV projection
+        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+        
+        # Output projection
+        self.out_proj = nn.Linear(d_model, d_model)
+        
+        # FFN
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim_feedforward, d_model),
+            nn.Dropout(dropout),
+        )
+        
+    def forward(self, x):
+        # Pre-norm attention
+        residual = x
+        x = self.ln1(x)
+        
+        B, T, C = x.shape
+        
+        # QKV projection
+        qkv = self.qkv(x)
+        qkv = qkv.view(B, T, 3, self.n_heads, self.head_dim)
+        qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, n_heads, T, head_dim)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        
+        # Scaled dot product attention with causal masking
+        attn_output = F.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=True,
+        )
+        
+        # Reshape and project
+        attn_output = attn_output.contiguous().view(B, T, C)
+        attn_output = self.out_proj(attn_output)
+        
+        x = residual + attn_output
+        
+        # Pre-norm FFN
+        residual = x
+        x = self.ln2(x)
+        x = self.ffn(x)
+        x = residual + x
+        
+        return x
 
 
 class TinyGPT(nn.Module):
@@ -21,14 +82,11 @@ class TinyGPT(nn.Module):
         self.pos_embedding = nn.Embedding(context_size, d_model)
 
         self.layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(
+            TransformerBlock(
                 d_model=d_model,
-                nhead=n_heads,
+                n_heads=n_heads,
                 dim_feedforward=4 * d_model,
                 dropout=dropout,
-                activation="gelu",
-                batch_first=True,
-                norm_first=True,
             )
             for _ in range(n_layers)
         ])
@@ -57,14 +115,8 @@ class TinyGPT(nn.Module):
         positions = torch.arange(0, T, device=input_ids.device).unsqueeze(0)
         x = self.token_embedding(input_ids) + self.pos_embedding(positions)
 
-        # Causal mask (True = masked)
-        mask = torch.triu(
-            torch.ones(T, T, device=input_ids.device),
-            diagonal=1,
-        ).bool()
-
         for layer in self.layers:
-            x = layer(x, src_mask=mask)
+            x = layer(x)
 
         x = self.ln_f(x)
         logits = self.lm_head(x)
