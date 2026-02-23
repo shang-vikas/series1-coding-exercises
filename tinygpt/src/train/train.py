@@ -118,7 +118,10 @@ def main():
 
     model = TinyGPT(
         vocab_size=config["vocab_size"],
-        context_size=config["context_size"]
+        context_size=config["context_size"],
+        d_model=config["d_model"],
+        n_layers=config["n_layers"],
+        n_heads=config["n_heads"],
     ).to(DEVICE)
 
     effective_tokens = config["batch_size"] * config["context_size"] * config["grad_accum_steps"]

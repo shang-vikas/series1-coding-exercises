@@ -3,9 +3,16 @@ val_path: "data/tokenized/val.bin"
 
 vocab_size: 8192
 context_size: 512
+
+# -------- Model --------
+d_model: 384
+n_layers: 6
+n_heads: 6
+
+# -------- Optimization --------
 batch_size: 32
 grad_accum_steps: 4
-max_steps: 800
+max_steps: 3200
 
 lr: 5.0e-4
 warmup_ratio: 0.05
