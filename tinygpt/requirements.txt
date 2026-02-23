@@ -1,0 +1,8 @@
+torch
+transformers
+sentencepiece
+datasets
+wandb
+tqdm
+numpy
+pyyaml

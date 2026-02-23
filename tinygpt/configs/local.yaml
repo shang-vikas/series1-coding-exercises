@@ -1,0 +1,16 @@
+data_path: "data/tokenized/train.bin"
+val_path: "data/tokenized/val.bin"
+
+vocab_size: 8192
+context_size: 128
+batch_size: 8
+grad_accum_steps: 1
+max_steps: 1000
+
+lr: 3.0e-4
+warmup_ratio: 0.05
+weight_decay: 0.1
+
+use_amp: false
+checkpoint_path: "checkpoint.pt"
+save_every: 100
